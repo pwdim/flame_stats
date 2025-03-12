@@ -1,0 +1,6 @@
+config.json
+*.log
+/off_commands
+.vscode/
+
+
