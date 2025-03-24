@@ -8,7 +8,7 @@ class HG(commands.Cog):
         self.bot = bot
 
     def get_leaderboard(self):
-        url = "https://api.flamemc.com.br/leaderboards?statId=19&size=200"
+        url = "https://api.flamemc.com.br/leaderboards?statId=3&size=200"
         response = requests.get(url)
         if response.status_code == 200:
             return response.json()
@@ -60,7 +60,7 @@ class HG(commands.Cog):
         "Master": discord.Colour(0xaa0000),
     }
 
-    @app_commands.command(name="hg", description="Veja as estatísticas de um jogador no 🏹 Hardcore Games")
+    @app_commands.command(name="arena", description="Veja suas estatísticas da Arena-PvP")
     @app_commands.describe(nick="Nome do jogador")
     async def hg(self, interaction: discord.Interaction, nick: str):
         await interaction.response.defer()
@@ -75,22 +75,23 @@ class HG(commands.Cog):
             avatar_url = f"https://mc-heads.net/avatar/{player_name}/256"
 
             embed = discord.Embed(
-                title=f"<:sopa:1352502661701959700> Hardcore Games - {player_name}",
+                title=f"🏹 HG - {player_name}",
                 color=discord.Color.dark_green()
             )
             embed.set_thumbnail(url=avatar_url)
 
             stat_keys = {
-                "hg_wins": "<a:wins:1348790119070564402> Vitórias ",
-                "hg_kills": "<a:abates:1348799859603406979> Abates ",
-                "hg_deaths": "<a:skull:1348799160979030096> Mortes ",
-                "hg_coins": "<a:coin:1348794160513024122> Coins ",
-                "hg_exp": "<a:xp:1348792513300795504> XP ",
+                "pvp_arena_kills": "<a:abates:1348799859603406979> Abates na Arena",
+                "pvp_arena_deaths": "<a:skull:1348799160979030096> Mortes na Arena",
+                "pvp_arena_streak": "<a:streak:1348793266358714521> KillStreak na Arena",
+                "pvp_arena_best_streak": "<a:streak:1348793098175647764> Melhor KillStreak na Arena",
+                "pvp_coins": "<a:coin:1348794160513024122> Coins no KitPvp",
+                "pvp_exp": "<a:xp:1348792513300795504> XP no KitPvp",
             }
 
             exp = 0
             for stat in stats:
-                if stat["statsMap"]["name"] == "hg_exp":
+                if stat["statsMap"]["name"] == "pvp_exp":
                     exp = stat["value"]
                     break
 
@@ -109,11 +110,8 @@ class HG(commands.Cog):
             embed_color = self.hg_rank_colors.get(rank_name, discord.Colour.gold())
             embed.color = embed_color
 
-            embed.add_field(name="<:rank:1352532962825998416> Rank", value=rank, inline=False)
-
-            if position:
-                embed.add_field(name="<:podium:1352528120762204190> Colocação", value=f"#{position}", inline=False)
-    
+            embed.add_field(name="<:rank:1352527135109283871> Rank", value=rank, inline=False)
+            embed.add_field(name="<:podium:1352528120762204190> Colocação", value=f"#{position}" if position else "Não classificado", inline=False)
 
             embed.set_footer(text="• Desenvolvido por pwdim", icon_url="https://mc-heads.net/avatar/pwdim/64")
             await interaction.followup.send(embed=embed)
@@ -123,3 +121,5 @@ class HG(commands.Cog):
 
 async def setup(bot):
     await bot.add_cog(HG(bot))
+
+

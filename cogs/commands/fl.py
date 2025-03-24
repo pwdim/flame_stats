@@ -3,12 +3,12 @@ import requests
 from discord.ext import commands
 from discord import app_commands
 
-class HG(commands.Cog):
+class League(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
     def get_leaderboard(self):
-        url = "https://api.flamemc.com.br/leaderboards?statId=19&size=200"
+        url = "https://api.flamemc.com.br/leaderboards?statId=25&size=200" # Assuming statId 30 for League
         response = requests.get(url)
         if response.status_code == 200:
             return response.json()
@@ -47,7 +47,7 @@ class HG(commands.Cog):
                 return f"{emoji} {rank_name}"
         return "Desconhecido"
 
-    hg_rank_colors = {
+    league_rank_colors = {
         "Bronze": discord.Colour(0xffff55),
         "Silver": discord.Colour(0xaaaaaa),
         "Gold": discord.Colour(0xffaa00),
@@ -60,9 +60,9 @@ class HG(commands.Cog):
         "Master": discord.Colour(0xaa0000),
     }
 
-    @app_commands.command(name="hg", description="Veja as estatísticas de um jogador no 🏹 Hardcore Games")
+    @app_commands.command(name="fl", description="Veja as estatísticas de um jogador no 🔥 FlameLeague")
     @app_commands.describe(nick="Nome do jogador")
-    async def hg(self, interaction: discord.Interaction, nick: str):
+    async def league(self, interaction: discord.Interaction, nick: str):
         await interaction.response.defer()
 
         try:
@@ -75,29 +75,29 @@ class HG(commands.Cog):
             avatar_url = f"https://mc-heads.net/avatar/{player_name}/256"
 
             embed = discord.Embed(
-                title=f"<:sopa:1352502661701959700> Hardcore Games - {player_name}",
+                title=f"🔥 FlameLeague - {player_name}",
                 color=discord.Color.dark_green()
             )
             embed.set_thumbnail(url=avatar_url)
 
             stat_keys = {
-                "hg_wins": "<a:wins:1348790119070564402> Vitórias ",
-                "hg_kills": "<a:abates:1348799859603406979> Abates ",
-                "hg_deaths": "<a:skull:1348799160979030096> Mortes ",
-                "hg_coins": "<a:coin:1348794160513024122> Coins ",
-                "hg_exp": "<a:xp:1348792513300795504> XP ",
+                "league_wins": "<a:wins:1348790119070564402> Vitórias ",
+                "league_kills": "<a:abates:1348799859603406979> Abates ",
+                "league_deaths": "<a:skull:1348799160979030096> Mortes ",
+                "league_coins": "<a:coin:1348794160513024122> Coins ",
+                "league_exp": "<a:xp:1348792513300795504> XP ",
             }
 
             exp = 0
             for stat in stats:
-                if stat["statsMap"]["name"] == "hg_exp":
+                if stat["statsMap"]["name"] == "league_exp":
                     exp = stat["value"]
                     break
 
             position = self.get_player_position(nick)
             rank = self.get_rank(exp, position)
 
-            for stat_name, label in stat_keys.items(): #Correção aqui
+            for stat_name, label in stat_keys.items():
                 value = "0"
                 for stat in stats:
                     if stat["statsMap"]["name"] == stat_name:
@@ -106,14 +106,13 @@ class HG(commands.Cog):
                 embed.add_field(name=label, value=f"• {value}", inline=False)
 
             rank_name = rank.split(" ")[1] if " " in rank else rank
-            embed_color = self.hg_rank_colors.get(rank_name, discord.Colour.gold())
+            embed_color = self.league_rank_colors.get(rank_name, discord.Colour.gold())
             embed.color = embed_color
 
             embed.add_field(name="<:rank:1352532962825998416> Rank", value=rank, inline=False)
 
             if position:
                 embed.add_field(name="<:podium:1352528120762204190> Colocação", value=f"#{position}", inline=False)
-    
 
             embed.set_footer(text="• Desenvolvido por pwdim", icon_url="https://mc-heads.net/avatar/pwdim/64")
             await interaction.followup.send(embed=embed)
@@ -122,4 +121,4 @@ class HG(commands.Cog):
             await interaction.followup.send("Erro ao buscar os dados.", ephemeral=True)
 
 async def setup(bot):
-    await bot.add_cog(HG(bot))
+    await bot.add_cog(League(bot))

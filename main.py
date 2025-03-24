@@ -14,19 +14,8 @@ with open('config.json', 'r') as f:
     config = json.load(f)
 
 # Usar o token e prefixo carregados do arquivo
-TOKEN = config['token']
-PREFIX = config['prefix']
-
-intents = discord.Intents.default()
-bot = commands.Bot(command_prefix=PREFIX, intents=intents)
-
-@bot.event
-async def on_ready():
-    print(f'Bot {bot.user} está online!')
-
-# Iniciar o bot com o token carregado
-bot.run(TOKEN)
-
+TOKEN = config['TOKEN']
+PREFIX = config['PREFIX']
 
 # Configuração do logging
 logging.basicConfig(level=logging.INFO,
@@ -47,10 +36,18 @@ async def on_ready():
 
 # Carregar o cog
 async def load_cogs():
-    await bot.load_extension("cogs.mcstats")
-    await bot.load_extension("cogs.status")
-    await bot.load_extension("cogs.hg")
-    await bot.load_extension("cogs.leaderboard")
+    await bot.load_extension("cogs.commands.mcstats")
+    await bot.load_extension("cogs.commands.status")
+    await bot.load_extension("cogs.commands.hg")
+    await bot.load_extension("cogs.commands.fl")
+    await bot.load_extension("cogs.commands.cxc")
+#    await bot.load_extension("cogs.commands.bw")
+#    await bot.load_extension("cogs.commands.sopa")
+    await bot.load_extension("cogs.commands.leaderboard_hg")
+    await bot.load_extension("cogs.commands.leaderboard_cxc")
+    await bot.load_extension("cogs.commands.leaderboard_fl")
+    await bot.load_extension("cogs.commands.leaderboard_pvp")
+#    await bot.load_extension("cogs.leaderboard")
     
 import asyncio
 asyncio.run(load_cogs())

@@ -2,5 +2,11 @@ config.json
 *.log
 /off_commands
 .vscode/
-
+.../cogs/___pycache__/
+/commands/___pycache__
+/cogs/___pycache__
+/cogs/types/
+discloud.config
+.../off_commands/
+.../cogs/types/
 

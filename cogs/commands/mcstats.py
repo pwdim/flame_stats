@@ -57,7 +57,6 @@ game_modes_config = {
             "competitive_defeats": "<a:skull:1348799160979030096> Derrotas em CxC",
             "competitive_kills": "<a:abates:1348799859603406979> Abates em CxC",
             "competitive_deaths": "<a:skull:1348799160979030096> Mortes em CxC",
-            "competitive_coins": "<a:coin:1348794160513024122> Coins em CxC",
             "competitive_exp": "<a:xp:1348792513300795504> XP em CxC",
         }
     },
@@ -131,12 +130,12 @@ class McStats(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @app_commands.command(name="mcstats", description="Busca informações de um jogador no FlameMC.")
+    @app_commands.command(name="info", description="Busca informações de um jogador no FlameMC.")
     @app_commands.describe(nick="Nome do jogador no Minecraft")
     async def mcstats(self, interaction: discord.Interaction, nick: str):
         await interaction.response.defer()
 
-        logging.info(f"Comando '/mcstats {nick}' usado por {interaction.user.name} ({interaction.user.id}) no servidor {interaction.guild.name} ({interaction.guild.id}) no canal {interaction.channel.name} ({interaction.channel.id}). Nick pesquisado: {nick}")
+        logging.info(f"Comando '/info {nick}' usado por {interaction.user.name} ({interaction.user.id}) no servidor {interaction.guild.name} ({interaction.guild.id}) no canal {interaction.channel.name} ({interaction.channel.id}). Nick pesquisado: {nick}")
         try:
             response = requests.get(f"https://api.flamemc.com.br/players/{nick}")
             response.raise_for_status()
@@ -153,46 +152,65 @@ class McStats(commands.Cog):
                 player_clan = "Sem clan"
             player_banned = "**<:barrier:1348790166344695841> **BANIDO** <:barrier:1348790166344695841>**" if data.get("banned", False) else ""
             player_premium = "<:premium:1348792849281318962> Original" if data.get("premium", False) else "<:offline:1348792969221640213> Pirata"
-            avatar_url = f"https://mc-heads.net/avatar/{player_name}/256"
+            avatar_url = f"https://mc-heads.net/avatar/{player_uuid}/256"
 
-            if player_rank == "HEAD_ADMIN":
-                player_rank = "ADMIN"
-            
-
-            
             # Cores por rank
             rank_colors = {
                 "CEO": (170, 0, 0), "ADMIN": (170, 0, 0), "HEAD_ADMIN": (170, 0, 0),
                 "MOD+": (146, 33, 145), "MOD": (146, 33, 145), "TRIAL": (146, 33, 145),
                 "CREATOR+": (4, 156, 156), "CREATOR": (85, 255, 255), "STUDIO": (170, 0, 170),
+                "BUILDER": (0, 	170, 	0),
                 "LEGEND": (170, 0, 170), "BETA": (4, 4, 192), "FLAME": (255, 170, 0), "SPARK": (255, 255, 85)
             }
             embed_color = discord.Color.from_rgb(*rank_colors.get(player_rank, (218, 218, 218)))
-            staff_ranks = ["STUDIO", "CREATOR+", "TRIAL", "MOD", "MOD+", "ADMIN", "HEAD_ADMIN", "CEO"]
+            staff_ranks = ["STUDIO", "CREATOR+", "TRIAL", "MOD", "MOD+", "ADMIN", "HEAD_ADMIN", "CEO", "BUILDER"]
             staff = "<a:staff:1348790083381362808>" if player_rank in staff_ranks else ""
+            
+            if player_rank == "CEO":
+                player_rank = "Administrador"
+            if player_rank == "HEAD_ADMIN":
+                player_rank = "Administrador"
+            if player_rank == "ADMIN":
+                player_rank = "Administrador"
+            if player_rank == "MOD+":
+                player_rank = "Moderador Primário"
+            if player_rank == "MOD":
+                player_rank = "Moderador Secúndario"
+            if player_rank == "TRIAL":
+                player_rank = "Trial Moderador"
+            if player_rank == "BUILDER":
+                player_rank = "Builder"
+            if player_rank == "STUDIO":
+                player_rank = "Studio"   
+            if player_rank == "CREATOR+":
+                player_rank = "Creator+"      
+            if player_rank == "CREATOR":
+                player_rank = "Creator"          
+            if player_rank == "BETA":
+                player_rank = "Beta"
+            if player_rank == "LEGEND":
+                player_rank = "Legend"         
+            if player_rank == "FLAME":
+                player_rank = "Flame"  
+            if player_rank == "SPARK":
+                player_rank = "Spark"                       
 
                 
 
             # Embed principal
-            embed = discord.Embed(title=f"<a:minecraft:1347947160229904394> Perfil de {nick}", color=embed_color)
+            embed = discord.Embed(title=f"<a:minecraft:1347947160229904394> Perfil de {player_name}", color=embed_color)
             embed.set_thumbnail(url=avatar_url)
             embed.add_field(name=player_banned, value="", inline=False)
             embed.add_field(name="> <a:nick:1348794533617340416> Nick: ", value=player_name, inline=True)
             embed.add_field(name=f"> <:ranks:1348796107504750744> Rank: {staff}", value=player_rank, inline=True)
             embed.add_field(name="", value="", inline=False)
             embed.add_field(name="", value="", inline=False)
-            embed.add_field(name="", value="", inline=False)
-            embed.add_field(name="", value="", inline=False)
             embed.add_field(name="> <:Clans:1348795465302282360> Clan: ", value=f"[{player_clan}]", inline=True)
             embed.add_field(name="> <:conta:1348794846336389232> Conta: ", value=player_premium, inline=True)
             embed.add_field(name="", value="", inline=False)
             embed.add_field(name="", value="", inline=False)
-            embed.add_field(name="", value="", inline=False)
-            embed.add_field(name="", value="", inline=False)
             embed.add_field(name="> <a:clock:1348792701918642278> Último Login: ", value=player_last_login, inline=True)
             embed.add_field(name="> <a:first:1348794127482884238> Conta Criada: ", value=player_first_login, inline=True)
-            embed.add_field(name="", value="", inline=False)
-            embed.add_field(name="", value="", inline=False)
             embed.add_field(name="", value="", inline=False)
             embed.add_field(name="", value="", inline=False)
             embed.add_field(name=f"> <:mcname:1348801843014270976> Ver no NameMC: ", value=f"`•` [Clique aqui](https://pt.namemc.com/search?q={player_uuid})", inline=True)
@@ -228,7 +246,7 @@ class McStats(commands.Cog):
                     if interaction.user == interaction.message.interaction.user:
                         await interaction.response.edit_message(embed=embed, view=StatsView())
                     else:
-                        await interaction.response.send_message("Use /mcstats <nick>.", ephemeral=True)
+                        await interaction.response.send_message("Use /info <nick>.", ephemeral=True)
 
             class GameModeButton(discord.ui.Button):
                 def __init__(self, mode_key, label):
@@ -239,7 +257,7 @@ class McStats(commands.Cog):
                     if interaction.user == interaction.message.interaction.user:
                         await interaction.response.edit_message(embed=mode_embeds[self.mode_key], view=StatsView())
                     else:
-                        await interaction.response.send_message("Use /mcstats <nick>.", ephemeral=True)
+                        await interaction.response.send_message("Use /info <nick>.", ephemeral=True)
 
             await interaction.followup.send(embed=embed, view=StatsView())
 
