@@ -1,0 +1,504 @@
+import discord
+import requests
+from discord.ext import commands
+from discord import app_commands
+import logging
+from datetime import datetime
+
+logging.basicConfig(level=logging.INFO,
+                    format='%(asctime)s - %(levelname)s - %(message)s',
+                    handlers=[logging.FileHandler('bot.log', encoding='utf-8')])
+
+def format_date_time(date_time):
+    if not date_time:
+        return "Indisponível"
+    dt = datetime.fromisoformat(date_time.replace("Z", "+00:00"))
+    return dt.strftime("%d/%m/%Y %H:%M")
+
+def format_number_with_period(number):
+    try:
+        num_str = str(int(number))
+        parts = []
+        while num_str:
+            parts.append(num_str[-3:])
+            num_str = num_str[:-3]
+        return ".".join(reversed(parts))
+    except ValueError:
+        return str(number)
+
+class AcademyLeaderboards(commands.Cog):
+    def __init__(self, bot):
+        self.bot = bot
+        self.leaderboard_data = {}
+        self.page_size = 10
+        self.max_position = 100
+        self.current_page_start_index = 0
+        self.original_interaction_user_id = None
+        self.current_stat_id = "120625" # Default to academy_exp
+        self.current_period = "total"
+
+        self.stat_info = {
+            "total": {
+                "120625": {"name": "XP", "stat_key": "academy_exp", "emoji": "<a:xp:1348792513300795504>", "endpoint_suffix": "", "data_key": "accountStats"},
+                "120627": {"name": "Arena Flat Abates", "stat_key": "academy_arena_flat_kills", "emoji": "<a:abates:1348799859603406979>", "endpoint_suffix": "", "data_key": "accountStats"},
+                "120628": {"name": "Arena Flat Mortes", "stat_key": "academy_arena_flat_deaths", "emoji": "<a:skull:1348799160979030096>", "endpoint_suffix": "", "data_key": "accountStats"},
+                "120629": {"name": "Arena Flat Streak", "stat_key": "academy_arena_flat_streak", "emoji": "<a:streak:1348793266358714521>", "endpoint_suffix": "", "data_key": "accountStats"},
+                "120630": {"name": "Arena Flat Melhor Streak", "stat_key": "academy_arena_flat_best_streak", "emoji": "<a:streak:1348793098175647764>", "endpoint_suffix": "", "data_key": "accountStats"},
+                "120632": {"name": "Arena Cave Mortes", "stat_key": "academy_arena_cave_deaths", "emoji": "<a:skull:1348799160979030096>", "endpoint_suffix": "", "data_key": "accountStats"},
+                "120633": {"name": "Arena Cave Streak", "stat_key": "academy_arena_cave_streak", "emoji": "<a:streak:1348793266358714521>", "endpoint_suffix": "", "data_key": "accountStats"},
+                "120635": {"name": "Digger Classic Vitórias", "stat_key": "academy_digger_classic_wins", "emoji": "<a:wins:1348790119070564402>", "endpoint_suffix": "", "data_key": "accountStats"},
+                "120636": {"name": "Digger Classic Streak", "stat_key": "academy_digger_classic_streak", "emoji": "<a:streak:1348793266358714521>", "endpoint_suffix": "", "data_key": "accountStats"},
+                "120637": {"name": "Digger Classic Derrotas", "stat_key": "academy_digger_classic_defeats", "emoji": "<a:skull:1348799160979030096>", "endpoint_suffix": "", "data_key": "accountStats"},
+                "120639": {"name": "Digger League Vitórias", "stat_key": "academy_digger_league_wins", "emoji": "<a:wins:1348790119070564402>", "endpoint_suffix": "", "data_key": "accountStats"},
+                "120640": {"name": "Digger League Streak", "stat_key": "academy_digger_league_streak", "emoji": "<a:streak:1348793266358714521>", "endpoint_suffix": "", "data_key": "accountStats"},
+                "120641": {"name": "Digger League Derrotas", "stat_key": "academy_digger_league_defeats", "emoji": "<a:skull:1348799160979030096>", "endpoint_suffix": "", "data_key": "accountStats"},
+                "120643": {"name": "Fast Trap Vitórias", "stat_key": "academy_fast_trap_wins", "emoji": "<a:wins:1348790119070564402>", "endpoint_suffix": "", "data_key": "accountStats"},
+                "120644": {"name": "Fast Trap Streak", "stat_key": "academy_fast_trap_streak", "emoji": "<a:streak:1348793266358714521>", "endpoint_suffix": "", "data_key": "accountStats"},
+                "120645": {"name": "Fast Trap Derrotas", "stat_key": "academy_fast_trap_defeats", "emoji": "<a:skull:1348799160979030096>", "endpoint_suffix": "", "data_key": "accountStats"},
+                "120646": {"name": "Fast Trap Melhor Streak", "stat_key": "academy_fast_trap_best_streak", "emoji": "<a:streak:1348793098175647764>", "endpoint_suffix": "", "data_key": "accountStats"},
+            },
+            "monthly": {
+                "120625": {"name": "XP", "stat_key": "academy_exp", "emoji": "<a:xp:1348792513300795504>", "endpoint_suffix": "/monthly", "data_key": "accountStatsMonthly"},
+                "120627": {"name": "Arena Flat Abates", "stat_key": "academy_arena_flat_kills", "emoji": "<a:abates:1348799859603406979>", "endpoint_suffix": "/monthly", "data_key": "accountStatsMonthly"},
+                "120628": {"name": "Arena Flat Mortes", "stat_key": "academy_arena_flat_deaths", "emoji": "<a:skull:1348799160979030096>", "endpoint_suffix": "/monthly", "data_key": "accountStatsMonthly"},
+                "120629": {"name": "Arena Flat Streak", "stat_key": "academy_arena_flat_streak", "emoji": "<a:streak:1348793266358714521>", "endpoint_suffix": "/monthly", "data_key": "accountStatsMonthly"},
+                "120630": {"name": "Arena Flat Melhor Streak", "stat_key": "academy_arena_flat_best_streak", "emoji": "<a:streak:1348793098175647764>", "endpoint_suffix": "/monthly", "data_key": "accountStatsMonthly"},
+                "120632": {"name": "Arena Cave Mortes", "stat_key": "academy_arena_cave_deaths", "emoji": "<a:skull:1348799160979030096>", "endpoint_suffix": "/monthly", "data_key": "accountStatsMonthly"},
+                "120633": {"name": "Arena Cave Streak", "stat_key": "academy_arena_cave_streak", "emoji": "<a:streak:1348793266358714521>", "endpoint_suffix": "/monthly", "data_key": "accountStatsMonthly"},
+                "120635": {"name": "Digger Classic Vitórias", "stat_key": "academy_digger_classic_wins", "emoji": "<a:wins:1348790119070564402>", "endpoint_suffix": "/monthly", "data_key": "accountStatsMonthly"},
+                "120636": {"name": "Digger Classic Streak", "stat_key": "academy_digger_classic_streak", "emoji": "<a:streak:1348793266358714521>", "endpoint_suffix": "/monthly", "data_key": "accountStatsMonthly"},
+                "120637": {"name": "Digger Classic Derrotas", "stat_key": "academy_digger_classic_defeats", "emoji": "<a:skull:1348799160979030096>", "endpoint_suffix": "/monthly", "data_key": "accountStatsMonthly"},
+                "120639": {"name": "Digger League Vitórias", "stat_key": "academy_digger_league_wins", "emoji": "<a:wins:1348790119070564402>", "endpoint_suffix": "/monthly", "data_key": "accountStatsMonthly"},
+                "120640": {"name": "Digger League Streak", "stat_key": "academy_digger_league_streak", "emoji": "<a:streak:1348793266358714521>", "endpoint_suffix": "/monthly", "data_key": "accountStatsMonthly"},
+                "120641": {"name": "Digger League Derrotas", "stat_key": "academy_digger_league_defeats", "emoji": "<a:skull:1348799160979030096>", "endpoint_suffix": "/monthly", "data_key": "accountStatsMonthly"},
+                "120643": {"name": "Fast Trap Vitórias", "stat_key": "academy_fast_trap_wins", "emoji": "<a:wins:1348790119070564402>", "endpoint_suffix": "/monthly", "data_key": "accountStatsMonthly"},
+                "120644": {"name": "Fast Trap Streak", "stat_key": "academy_fast_trap_streak", "emoji": "<a:streak:1348793266358714521>", "endpoint_suffix": "/monthly", "data_key": "accountStatsMonthly"},
+                "120645": {"name": "Fast Trap Derrotas", "stat_key": "academy_fast_trap_defeats", "emoji": "<a:skull:1348799160979030096>", "endpoint_suffix": "/monthly", "data_key": "accountStatsMonthly"},
+                "120646": {"name": "Fast Trap Melhor Streak", "stat_key": "academy_fast_trap_best_streak", "emoji": "<a:streak:1348793098175647764>", "endpoint_suffix": "/monthly", "data_key": "accountStatsMonthly"},
+            },
+            "weekly": {
+                "120625": {"name": "XP", "stat_key": "academy_exp", "emoji": "<a:xp:1348792513300795504>", "endpoint_suffix": "/weekly", "data_key": "accountStatsWeekly"},
+                "120627": {"name": "Arena Flat Abates", "stat_key": "academy_arena_flat_kills", "emoji": "<a:abates:1348799859603406979>", "endpoint_suffix": "/weekly", "data_key": "accountStatsWeekly"},
+                "120628": {"name": "Arena Flat Mortes", "stat_key": "academy_arena_flat_deaths", "emoji": "<a:skull:1348799160979030096>", "endpoint_suffix": "/weekly", "data_key": "accountStatsWeekly"},
+                "120629": {"name": "Arena Flat Streak", "stat_key": "academy_arena_flat_streak", "emoji": "<a:streak:1348793266358714521>", "endpoint_suffix": "/weekly", "data_key": "accountStatsWeekly"},
+                "120630": {"name": "Arena Flat Melhor Streak", "stat_key": "academy_arena_flat_best_streak", "emoji": "<a:streak:1348793098175647764>", "endpoint_suffix": "/weekly", "data_key": "accountStatsWeekly"},
+                "120632": {"name": "Arena Cave Mortes", "stat_key": "academy_arena_cave_deaths", "emoji": "<a:skull:1348799160979030096>", "endpoint_suffix": "/weekly", "data_key": "accountStatsWeekly"},
+                "120633": {"name": "Arena Cave Streak", "stat_key": "academy_arena_cave_streak", "emoji": "<a:streak:1348793266358714521>", "endpoint_suffix": "/weekly", "data_key": "accountStatsWeekly"},
+                "120635": {"name": "Digger Classic Vitórias", "stat_key": "academy_digger_classic_wins", "emoji": "<a:wins:1348790119070564402>", "endpoint_suffix": "/weekly", "data_key": "accountStatsWeekly"},
+                "120636": {"name": "Digger Classic Streak", "stat_key": "academy_digger_classic_streak", "emoji": "<a:streak:1348793266358714521>", "endpoint_suffix": "/weekly", "data_key": "accountStatsWeekly"},
+                "120637": {"name": "Digger Classic Derrotas", "stat_key": "academy_digger_classic_defeats", "emoji": "<a:skull:1348799160979030096>", "endpoint_suffix": "/weekly", "data_key": "accountStatsWeekly"},
+                "120639": {"name": "Digger League Vitórias", "stat_key": "academy_digger_league_wins", "emoji": "<a:wins:1348790119070564402>", "endpoint_suffix": "/weekly", "data_key": "accountStatsWeekly"},
+                "120640": {"name": "Digger League Streak", "stat_key": "academy_digger_league_streak", "emoji": "<a:streak:1348793266358714521>", "endpoint_suffix": "/weekly", "data_key": "accountStatsWeekly"},
+                "120641": {"name": "Digger League Derrotas", "stat_key": "academy_digger_league_defeats", "emoji": "<a:skull:1348799160979030096>", "endpoint_suffix": "/weekly", "data_key": "accountStatsWeekly"},
+                "120643": {"name": "Fast Trap Vitórias", "stat_key": "academy_fast_trap_wins", "emoji": "<a:wins:1348790119070564402>", "endpoint_suffix": "/weekly", "data_key": "accountStatsWeekly"},
+                "120644": {"name": "Fast Trap Streak", "stat_key": "academy_fast_trap_streak", "emoji": "<a:streak:1348793266358714521>", "endpoint_suffix": "/weekly", "data_key": "accountStatsWeekly"},
+                "120645": {"name": "Fast Trap Derrotas", "stat_key": "academy_fast_trap_defeats", "emoji": "<a:skull:1348799160979030096>", "endpoint_suffix": "/weekly", "data_key": "accountStatsWeekly"},
+                "120646": {"name": "Fast Trap Melhor Streak", "stat_key": "academy_fast_trap_best_streak", "emoji": "<a:streak:1348793098175647764>", "endpoint_suffix": "/weekly", "data_key": "accountStatsWeekly"},
+            },
+        }
+
+    academy = app_commands.Group(name="academy", description="Exibe as classificações da Academy.")
+
+    async def fetch_leaderboard(self, stat_id: str, period: str):
+        selected_stat_info = self.stat_info.get(period, {}).get(stat_id)
+        if not selected_stat_info:
+            print(f"Error: No stat info found for period '{period}' and statId '{stat_id}'")
+            self.leaderboard_data[period] = None
+            return
+
+        suffix = selected_stat_info["endpoint_suffix"]
+        url = f"https://api.flamemc.com.br/leaderboards{suffix}?statId={stat_id}&size=200"
+        try:
+            response = requests.get(url)
+            response.raise_for_status()
+            self.leaderboard_data[period] = response.json()
+            self.current_stat_id = stat_id
+            self.current_period = period
+        except requests.exceptions.RequestException as e:
+            print(f"Error fetching Academy {period} leaderboard for statId {stat_id}: {e}")
+            self.leaderboard_data[period] = None
+
+    async def create_leaderboard_page(self, start_index: int, is_ephemeral: bool):
+        leaderboard_data_for_period = self.leaderboard_data.get(self.current_period)
+
+        if leaderboard_data_for_period is None:
+            embed = discord.Embed(
+                title="Erro na Classificação Academy",
+                description="Dados do placar da Academy não estão disponíveis ou houve um erro na comunicação com a API.",
+                color=discord.Color.red(),
+            )
+            return embed, discord.ui.View()
+
+        if not leaderboard_data_for_period:
+            current_period_stats = self.stat_info.get(self.current_period, {})
+            current_stat_name = current_period_stats.get(self.current_stat_id, {}).get("name", "N/A")
+
+            period_text = {"total": "Total", "monthly": "Mensal", "weekly": "Semanal"}.get(self.current_period, "")
+            embed = discord.Embed(
+                title=f"Classificação Academy ({period_text}) - {current_stat_name}",
+                description=f"Não há dados disponíveis para a classificação de {current_stat_name} no período {period_text} no momento. Tente novamente mais tarde!",
+                color=discord.Color.orange(),
+            )
+            embed.set_footer(
+                text="• Desenvolvido por pwdim",
+                icon_url="https://mc-heads.net/avatar/pwdim/64",
+            )
+            return embed, discord.ui.View()
+
+
+        end_index = min(
+            start_index + self.page_size, len(leaderboard_data_for_period), self.max_position
+        )
+        page_data = leaderboard_data_for_period[start_index:end_index]
+
+        current_period_stats = self.stat_info.get(self.current_period, {})
+        current_stat_name = current_period_stats.get(self.current_stat_id, {}).get("name", "N/A")
+        period_text = {"total": "Total", "monthly": "Mensal", "weekly": "Semanal"}.get(self.current_period, "")
+        embed = discord.Embed(
+            title=f"Classificação Academy ({period_text}) - {current_stat_name}",
+            color=discord.Color.blue(),
+        )
+
+        if page_data:
+            first_player_name = page_data[0]["name"]
+            avatar_url = f"https://mc-heads.net/avatar/{first_player_name}/256"
+            embed.set_thumbnail(url=avatar_url)
+        else:
+            embed.description = "Não há jogadores nesta página ou no placar de Academy."
+
+        stat_key_to_display = current_period_stats.get(self.current_stat_id, {}).get("stat_key")
+        stat_emoji_to_display = current_period_stats.get(self.current_stat_id, {}).get("emoji")
+        data_key = current_period_stats.get(self.current_stat_id, {}).get("data_key")
+
+        for player in page_data:
+            position = player["position"]
+            name = player["name"]
+            clan = player.get("clan")
+            clan_text = f"[{clan}]" if clan else ""
+
+            banned = any(
+                rank.get("rank") == "BANIDO" for rank in player.get("playerRanks", [])
+            )
+            banned_text = (
+                "<:barrier:1348790166344695841> BANIDO <:barrier:1348790166344695841>"
+                if banned
+                else ""
+            )
+
+            stat_value = 0
+            if data_key:
+                for stat in player.get(data_key, []):
+                    if stat.get("statsMap", {}).get("name") == stat_key_to_display:
+                        stat_value = stat["value"]
+                        break
+
+            formatted_stat_value = "{:,}".format(stat_value).replace(",", ".")
+
+            embed.add_field(
+                name=f"#{position} - {name} {clan_text}\n {banned_text}",
+                value=f"{stat_emoji_to_display} {current_stat_name}: {formatted_stat_value}",
+                inline=False,
+            )
+
+        embed.set_footer(
+            text="• Desenvolvido por pwdim",
+            icon_url="https://mc-heads.net/avatar/pwdim/64",
+        )
+
+        total_players = min(
+            len(leaderboard_data_for_period), self.max_position
+        )
+        total_pages = (total_players + self.page_size - 1) // self.page_size
+        current_page_number = (start_index // self.page_size) + 1
+        embed.set_author(name=f"Página {current_page_number}/{total_pages}")
+
+        class LeaderboardView(discord.ui.View):
+            def __init__(self, parent_cog, initial_start_index, original_user_id, is_ephemeral_view, custom_id_suffix: str):
+                super().__init__(timeout=300)
+                self.parent_cog = parent_cog
+                self.current_start_index = initial_start_index
+                self.original_user_id = original_user_id
+                self.is_ephemeral_view = is_ephemeral_view
+                self.custom_id_suffix = custom_id_suffix
+
+                self.add_item(self.create_stat_select())
+                self.add_item(self.create_page_select())
+                self.add_item(
+                    SearchPlayerButton(self.parent_cog, self.original_user_id, self.is_ephemeral_view, self.custom_id_suffix)
+                )
+
+            async def interaction_check(self, interaction: discord.Interaction) -> bool:
+                if interaction.user and interaction.user.id == self.original_user_id:
+                    return True
+                else:
+                    await interaction.response.send_message(
+                        "Apenas quem invocou o comando pode interagir com ele.",
+                        ephemeral=True,
+                    )
+                    return False
+
+            def create_stat_select(self):
+                options = []
+                current_period_stats = self.parent_cog.stat_info.get(self.parent_cog.current_period, {})
+                for stat_id, info in current_period_stats.items():
+                    options.append(
+                        discord.SelectOption(
+                            label=info["name"], value=stat_id, emoji=info["emoji"]
+                        )
+                    )
+
+                current_stat_info = current_period_stats.get(self.parent_cog.current_stat_id)
+                placeholder_text = "Selecione uma estatística..."
+                if current_stat_info:
+                    placeholder_text = f"Estatística: {current_stat_info['name']}"
+
+                select = discord.ui.Select(
+                    placeholder=placeholder_text,
+                    options=options,
+                    custom_id=f"stat_select_{self.custom_id_suffix}",
+                )
+                select.callback = self.stat_select_callback
+                return select
+
+            async def stat_select_callback(self, interaction: discord.Interaction):
+                new_stat_id = interaction.data["values"][0]
+                await interaction.response.defer()
+
+                self.parent_cog.current_stat_id = new_stat_id
+                await self.parent_cog.fetch_leaderboard(self.parent_cog.current_stat_id, self.parent_cog.current_period)
+                self.parent_cog.current_page_start_index = 0
+
+                embed, view = await self.parent_cog.create_leaderboard_page(
+                    self.parent_cog.current_page_start_index, self.is_ephemeral_view
+                )
+                await interaction.edit_original_response(embed=embed, view=view)
+
+            def create_page_select(self):
+                leaderboard_data_for_period = self.parent_cog.leaderboard_data.get(self.parent_cog.current_period)
+                if leaderboard_data_for_period is None or not leaderboard_data_for_period:
+                    return discord.ui.Select(placeholder="Nenhuma página disponível", options=[discord.SelectOption(label="N/A", value="0")], disabled=True)
+
+                options = []
+                total_players = min(
+                    len(leaderboard_data_for_period), self.parent_cog.max_position
+                )
+                total_pages = (
+                    total_players + self.parent_cog.page_size - 1
+                ) // self.parent_cog.page_size
+
+                for i in range(total_pages):
+                    start_pos = i * self.parent_cog.page_size + 1
+                    end_pos = min((i + 1) * self.parent_cog.page_size, total_players)
+                    options.append(
+                        discord.SelectOption(
+                            label=f"Página {i + 1} ({start_pos}-{end_pos})",
+                            value=str(i * self.parent_cog.page_size),
+                        )
+                    )
+
+                if not options:
+                    options.append(
+                        discord.SelectOption(
+                            label="Nenhuma página disponível",
+                            value="0",
+                            default=True,
+                        )
+                    )
+
+                select = discord.ui.Select(
+                    placeholder="Ir para página...",
+                    options=options,
+                    custom_id=f"page_select_{self.custom_id_suffix}",
+                    disabled=not options or total_pages <= 1,
+                )
+                select.callback = self.page_select_callback
+                return select
+
+            async def page_select_callback(self, interaction: discord.Interaction):
+                new_start_index = int(interaction.data["values"][0])
+                await interaction.response.defer()
+                self.parent_cog.current_page_start_index = new_start_index
+                embed, view = await self.parent_cog.create_leaderboard_page(
+                    new_start_index, self.is_ephemeral_view
+                )
+                await interaction.edit_original_response(embed=embed, view=view)
+
+        class SearchPlayerButton(discord.ui.Button):
+            def __init__(self, parent_cog, original_user_id, is_ephemeral_button, custom_id_suffix: str):
+                super().__init__(
+                    label="Pesquisar Jogador",
+                    style=discord.ButtonStyle.secondary,
+                    custom_id=f"search_player_{custom_id_suffix}",
+                )
+                self.parent_cog = parent_cog
+                self.original_user_id = original_user_id
+                self.is_ephemeral_button = is_ephemeral_button
+                self.custom_id_suffix = custom_id_suffix
+
+            async def callback(self, interaction: discord.Interaction):
+                if interaction.user.id != self.original_user_id:
+                    await interaction.response.send_message(
+                        "Apenas quem invocou o comando pode interagir com ele.",
+                        ephemeral=True,
+                    )
+                    return
+
+                class NickSearchModal(discord.ui.Modal, title=f"Pesquisar Jogador {self.custom_id_suffix.replace('_', ' ').title()}"):
+                    def __init__(self, parent_cog, is_ephemeral_modal):
+                        super().__init__()
+                        self.parent_cog = parent_cog
+                        self.is_ephemeral_modal = is_ephemeral_modal
+                        self.nick_input = discord.ui.TextInput(
+                            label="Nick do Jogador",
+                            placeholder="Digite o nick do jogador...",
+                            max_length=16,
+                            min_length=3,
+                            required=True,
+                        )
+                        self.add_item(self.nick_input)
+
+                    async def on_submit(self, interaction: discord.Interaction):
+                        await interaction.response.defer(ephemeral=True)
+                        leaderboard_data_for_period = self.parent_cog.leaderboard_data.get(self.parent_cog.current_period)
+                        search_nick = self.nick_input.value.strip()
+
+                        if not leaderboard_data_for_period:
+                            await interaction.followup.send(
+                                "Os dados da leaderboard não estão disponíveis.",
+                                ephemeral=True,
+                            )
+                            return
+
+                        found_player = None
+                        for player in leaderboard_data_for_period:
+                            if player["name"].lower() == search_nick.lower():
+                                found_player = player
+                                break
+
+                        if found_player:
+                            position = found_player["position"]
+                            target_page_index = (position - 1) // self.parent_cog.page_size
+                            self.parent_cog.current_page_start_index = target_page_index * self.parent_cog.page_size
+                            
+                            embed, view = await self.parent_cog.create_leaderboard_page(
+                                self.parent_cog.current_page_start_index, self.is_ephemeral_modal
+                            )
+                            await interaction.edit_original_response(embed=embed, view=view)
+
+                        else:
+                            await interaction.followup.send(
+                                f"Jogador '**{search_nick}**' não encontrado na leaderboard atual (Top {self.parent_cog.max_position}).",
+                                ephemeral=True,
+                            )
+
+                modal = NickSearchModal(self.parent_cog, self.is_ephemeral_button)
+                await interaction.response.send_modal(modal)
+
+        view = LeaderboardView(self, start_index, self.original_interaction_user_id, is_ephemeral, "academy")
+        return embed, view
+
+    @academy.command(name="total", description="Exibe a classificação total da Academy.")
+    async def total(self, interaction: discord.Interaction):
+        should_be_ephemeral = False
+        allowed_channels_cog = self.bot.get_cog("AllowedChannels")
+        
+        if allowed_channels_cog and interaction.guild: 
+            guild_id_str = str(interaction.guild_id)
+            
+            if guild_id_str in allowed_channels_cog.allowed_channel_ids and \
+               allowed_channels_cog.allowed_channel_ids[guild_id_str] and \
+               interaction.channel_id not in allowed_channels_cog.allowed_channel_ids[guild_id_str]:
+                
+                should_be_ephemeral = True
+        
+        await interaction.response.defer(ephemeral=should_be_ephemeral)
+        self.original_interaction_user_id = interaction.user.id
+        self.current_period = "total"
+        self.current_stat_id = "120625"
+
+        await self.fetch_leaderboard(self.current_stat_id, self.current_period)
+
+        if self.leaderboard_data.get(self.current_period) is None:
+            await interaction.followup.send(
+                "Erro ao buscar a classificação total da Academy. Tente novamente mais tarde.",
+                ephemeral=True,
+            )
+            return
+
+        self.current_page_start_index = 0
+        embed, view = await self.create_leaderboard_page(self.current_page_start_index, should_be_ephemeral)
+        await interaction.followup.send(
+            embed=embed, view=view, ephemeral=should_be_ephemeral
+        )
+
+    @academy.command(name="mensal", description="Exibe a classificação mensal da Academy.")
+    async def mensal(self, interaction: discord.Interaction):
+        should_be_ephemeral = False
+        allowed_channels_cog = self.bot.get_cog("AllowedChannels")
+        
+        if allowed_channels_cog and interaction.guild: 
+            guild_id_str = str(interaction.guild_id)
+            
+            if guild_id_str in allowed_channels_cog.allowed_channel_ids and \
+               allowed_channels_cog.allowed_channel_ids[guild_id_str] and \
+               interaction.channel_id not in allowed_channels_cog.allowed_channel_ids[guild_id_str]:
+                
+                should_be_ephemeral = True
+        
+        await interaction.response.defer(ephemeral=should_be_ephemeral)
+        self.original_interaction_user_id = interaction.user.id
+        self.current_period = "monthly"
+        self.current_stat_id = "120625"
+
+        await self.fetch_leaderboard(self.current_stat_id, self.current_period)
+
+        if self.leaderboard_data.get(self.current_period) is None:
+            await interaction.followup.send(
+                "Erro ao buscar a classificação mensal da Academy. Tente novamente mais tarde.",
+                ephemeral=True,
+            )
+            return
+
+        self.current_page_start_index = 0
+        embed, view = await self.create_leaderboard_page(self.current_page_start_index, should_be_ephemeral)
+        await interaction.followup.send(
+            embed=embed, view=view, ephemeral=should_be_ephemeral
+        )
+
+    @academy.command(name="semanal", description="Exibe a classificação semanal da Academy.")
+    async def semanal(self, interaction: discord.Interaction):
+        should_be_ephemeral = False
+        allowed_channels_cog = self.bot.get_cog("AllowedChannels")
+        
+        if allowed_channels_cog and interaction.guild: 
+            guild_id_str = str(interaction.guild_id)
+            
+            if guild_id_str in allowed_channels_cog.allowed_channel_ids and \
+               allowed_channels_cog.allowed_channel_ids[guild_id_str] and \
+               interaction.channel_id not in allowed_channels_cog.allowed_channel_ids[guild_id_str]:
+                
+                should_be_ephemeral = True
+        
+        await interaction.response.defer(ephemeral=should_be_ephemeral)
+        self.original_interaction_user_id = interaction.user.id
+        self.current_period = "weekly"
+        self.current_stat_id = "120625"
+
+        await self.fetch_leaderboard(self.current_stat_id, self.current_period)
+
+        if self.leaderboard_data.get(self.current_period) is None:
+            await interaction.followup.send(
+                "Erro ao buscar a classificação semanal da Academy. Tente novamente mais tarde.",
+                ephemeral=True,
+            )
+            return
+
+        self.current_page_start_index = 0
+        embed, view = await self.create_leaderboard_page(self.current_page_start_index, should_be_ephemeral)
+        await interaction.followup.send(
+            embed=embed, view=view, ephemeral=should_be_ephemeral
+        )
+
+
+async def setup(bot):
+    await bot.add_cog(AcademyLeaderboards(bot))
