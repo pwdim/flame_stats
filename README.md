@@ -1,4 +1,4 @@
-<h1> Flame Stats </h1>
+<h1> Flame Stats </h1> <img src= https://imgur.com/5gpnhKO.png width=120px>
 
 <h2>O que é?</h2>
 <p>Bot de discord em Python que requisita as informações da API pública do FlameMC (api.flamemc.com.br) e exibe elas em forma de embed.</p>
