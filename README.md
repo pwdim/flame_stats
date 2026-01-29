@@ -47,7 +47,7 @@ Comandos restritos à moderação do servidor para controlar onde o bot era util
 ## 🛠️ Tecnologias
 
 * **Linguagem:** Python
-* **Framework:** Discord.py (ou equivalente para Python)
+* **Framework:** Discord.py
 * **Hospedagem:** **DisCloud** (Plataforma gratuita utilizada para manter o bot rodando 24/7).
 * **Assistência de IA:** Google Gemini (Utilizado como ferramenta de apoio no desenvolvimento e otimização do projeto).
 * **Integração:** Requisição de API (HTTP Requests) para a API pública do FlameMC.
